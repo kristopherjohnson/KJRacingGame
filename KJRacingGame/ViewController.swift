@@ -24,6 +24,10 @@ class ViewController: UIViewController {
 
     @IBOutlet weak var testImage: UIImageView!
 
+    var displayLink: CADisplayLink!
+
+    var rotationAngle: Double = 0.0
+
     let motionMgr = CMMotionManager()
     let motionUpdateInterval: NSTimeInterval = 0.01
 
@@ -37,29 +41,46 @@ class ViewController: UIViewController {
     override func viewDidAppear(animated: Bool) {
         super.viewDidAppear(animated)
         startMotionUpdates()
+        startScreenUpdates()
     }
 
     override func viewWillDisappear(animated: Bool) {
         super.viewWillDisappear(animated)
         stopMotionUpdates()
+        stopScreenUpdates()
     }
 
+
+    // MARK: Screen updates
+
+    func onScreenUpdate(displayLink: CADisplayLink) {
+        testImage.transform = CGAffineTransformMakeRotation(CGFloat(rotationAngle))
+    }
+
+    func startScreenUpdates() {
+        displayLink = CADisplayLink(target: self, selector: "onScreenUpdate:")
+        displayLink.addToRunLoop(NSRunLoop.currentRunLoop(), forMode: NSDefaultRunLoopMode)
+    }
+
+    func stopScreenUpdates() {
+        displayLink.invalidate()
+    }
 
     // MARK: Rotation handling
 
     func onMotionUpdateGravityX(gravityX: Double, gravityY: Double) {
 
-        var rotation = atan2(gravityX, gravityY)
+        var rot = atan2(gravityX, gravityY)
 
         switch UIDevice.currentDevice().orientation {
-        case .Portrait:           rotation -= M_PI
+        case .Portrait:           rot -= M_PI
         case .PortraitUpsideDown: break
-        case .LandscapeLeft:      rotation += M_PI_2
-        case .LandscapeRight:     rotation -= M_PI_2
+        case .LandscapeLeft:      rot += M_PI_2
+        case .LandscapeRight:     rot -= M_PI_2
         default:                  break
         }
 
-        testImage.transform = CGAffineTransformMakeRotation(CGFloat(rotation))
+        rotationAngle = rot
     }
 
     func startMotionUpdates() {
