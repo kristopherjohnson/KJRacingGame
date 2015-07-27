@@ -9,12 +9,27 @@
 import UIKit
 import CoreMotion
 
+
+struct LowPassFilterSignal {
+    var value: Double
+    let filterFactor: Double
+
+    mutating func update(newValue: Double) {
+        value = filterFactor * value + (1.0 - filterFactor) * newValue
+    }
+}
+
+
 class ViewController: UIViewController {
 
     @IBOutlet weak var testImage: UIImageView!
 
-    let motionManager = CMMotionManager()
+    let motionMgr = CMMotionManager()
     let motionUpdateInterval: NSTimeInterval = 0.01
+
+    // Low-pass filters used if we only have accelerometer data rather than gyroscope
+    var smoothGravityX = LowPassFilterSignal(value: 0, filterFactor: 0.85)
+    var smoothGravityY = LowPassFilterSignal(value: 0, filterFactor: 0.85)
 
 
     // MARK: View lifecycle
@@ -35,6 +50,7 @@ class ViewController: UIViewController {
     func onMotionUpdateGravityX(gravityX: Double, gravityY: Double) {
 
         var rotation = atan2(gravityX, gravityY)
+
         switch UIDevice.currentDevice().orientation {
         case .Portrait:           rotation -= M_PI
         case .PortraitUpsideDown: break
@@ -47,22 +63,25 @@ class ViewController: UIViewController {
     }
 
     func startMotionUpdates() {
-        if motionManager.deviceMotionAvailable {
-            motionManager.deviceMotionUpdateInterval = motionUpdateInterval
-            motionManager.startDeviceMotionUpdatesToQueue(NSOperationQueue.mainQueue()) { [weak self] (data: CMDeviceMotion?, error: NSError?) -> Void in
+        if motionMgr.deviceMotionAvailable {
+            motionMgr.deviceMotionUpdateInterval = motionUpdateInterval
+            motionMgr.startDeviceMotionUpdatesToQueue(NSOperationQueue.mainQueue()) { [weak self] (data: CMDeviceMotion?, error: NSError?) -> Void in
                 guard let data = data else { return }
                 guard let vc = self else { return }
                 vc.onMotionUpdateGravityX(data.gravity.x, gravityY: data.gravity.y)
             }
         }
-        else if motionManager.accelerometerAvailable {
-            motionManager.accelerometerUpdateInterval = motionUpdateInterval
-            motionManager.startAccelerometerUpdatesToQueue(NSOperationQueue.mainQueue()) { [weak self] (data: CMAccelerometerData?, error: NSError?) in
+        else if motionMgr.accelerometerAvailable {
+            motionMgr.accelerometerUpdateInterval = motionUpdateInterval
+            motionMgr.startAccelerometerUpdatesToQueue(NSOperationQueue.mainQueue()) { [weak self] (data: CMAccelerometerData?, error: NSError?) in
                 guard let data = data else { return }
                 guard let vc = self else { return }
-                vc.onMotionUpdateGravityX(data.acceleration.x, gravityY: data.acceleration.y)
 
-                // TODO: accelerometer data is jittery.  Need to smooth it.
+                // Accelerometer data is jittery, so use low-pass filter to smooth it
+                vc.smoothGravityX.update(data.acceleration.x)
+                vc.smoothGravityY.update(data.acceleration.y)
+
+                vc.onMotionUpdateGravityX(vc.smoothGravityX.value, gravityY: vc.smoothGravityY.value)
             }
         }
         else {
@@ -71,11 +90,11 @@ class ViewController: UIViewController {
     }
 
     func stopMotionUpdates() {
-        if motionManager.deviceMotionAvailable {
-            motionManager.stopDeviceMotionUpdates()
+        if motionMgr.deviceMotionAvailable {
+            motionMgr.stopDeviceMotionUpdates()
         }
-        else if motionManager.accelerometerAvailable {
-            motionManager.stopAccelerometerUpdates()
+        else if motionMgr.accelerometerAvailable {
+            motionMgr.stopAccelerometerUpdates()
         }
     }
 }
